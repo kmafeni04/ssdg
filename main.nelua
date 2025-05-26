@@ -1,0 +1,63 @@
+require "string"
+
+local test_file = [=[
+  ---# Header
+  ---## heading level 2
+  ---### heading level 3
+  ---#### heading level 4
+  ---##### heading level 5
+  ---###### heading level 6
+  --[[
+    Multiline
+  ]]--
+]=]
+
+local function trim_wspace(s: string)
+  local _, str_seq = s:match("^%s*(.-)%s*$")
+  return str_seq[1]
+end
+
+local function escape_special(s: string)
+  return s:gsub("([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1")
+end
+
+local lines: sequence(string)
+
+for line in string.gmatch(test_file .. "\n", "([^\r\n]+)\r?\n") do
+  lines:push(trim_wspace(line))
+end
+
+local Multiline = @record{
+  start: string,
+  ending: string
+}
+
+local sb: stringbuilder
+local li = 0
+local singleline = "--"
+local multiline: Multiline = {"--[[", "]]--"}
+local lead = "%-"
+while li <= #lines do
+  if lines[li]:match("^" .. escape_special(singleline) .. "######") then
+    print(lines[li]:sub(#singleline + 1))
+  elseif lines[li]:match("^" .. singleline .. "#####") then
+    print(lines[li]:sub(#singleline + 1))
+  elseif lines[li]:match("^" .. singleline .. "####") then
+    print(lines[li]:sub(#singleline + 1))
+  elseif lines[li]:match("^" .. singleline .. "###") then
+    print(lines[li]:sub(#singleline + 1))
+  elseif lines[li]:match("^" .. singleline .. "##") then
+    print(lines[li]:sub(#singleline + 1))
+  elseif lines[li]:match("^" .. singleline .. "#") then
+    print(lines[li]:sub(#singleline + 1))
+  elseif lines[li]:match("^" .. multiline.start) then
+    local block = lines[li]:sub(#multiline.start + 1)
+    repeat
+      li = li + 1
+      block = block .. "\n" .. lines[li]
+    until lines[li]:match(multiline.ending .. "$")
+    block = block:sub(1, #block - #multiline.ending)
+    print(block)
+  end
+  li = li + 1
+end
