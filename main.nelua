@@ -1,16 +1,10 @@
 require "string"
+require "io"
+require "os"
 
-local test_file = [=[
-  ---# Header
-  ---## heading level 2
-  ---### heading level 3
-  ---#### heading level 4
-  ---##### heading level 5
-  ---###### heading level 6
-  --[[
-    Multiline
-  ]]--
-]=]
+require "libs.dirent"
+require "libs.stat"
+local json = require "libs.json"
 
 local function trim_wspace(s: string)
   local _, str_seq = s:match("^%s*(.-)%s*$")
@@ -18,46 +12,259 @@ local function trim_wspace(s: string)
 end
 
 local function escape_special(s: string)
-  return s:gsub("([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1")
+  local s = s:gsub("([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1")
+  return s
 end
 
-local lines: sequence(string)
-
-for line in string.gmatch(test_file .. "\n", "([^\r\n]+)\r?\n") do
-  lines:push(trim_wspace(line))
+local function mkdir_recursive(path: string)
+  local tmp: string
+  for i = 1, #path do
+    tmp = tmp .. path:sub(i,i)
+    if tmp[#tmp] == '/'_u8 then
+      mkdir(tmp, S_IRWXU)
+    end
+  end
 end
+
 
 local Multiline = @record{
   start: string,
   ending: string
 }
 
-local sb: stringbuilder
-local li = 0
-local singleline = "--"
-local multiline: Multiline = {"--[[", "]]--"}
-local lead = "%-"
-while li <= #lines do
-  if lines[li]:match("^" .. escape_special(singleline) .. "######") then
-    print(lines[li]:sub(#singleline + 1))
-  elseif lines[li]:match("^" .. singleline .. "#####") then
-    print(lines[li]:sub(#singleline + 1))
-  elseif lines[li]:match("^" .. singleline .. "####") then
-    print(lines[li]:sub(#singleline + 1))
-  elseif lines[li]:match("^" .. singleline .. "###") then
-    print(lines[li]:sub(#singleline + 1))
-  elseif lines[li]:match("^" .. singleline .. "##") then
-    print(lines[li]:sub(#singleline + 1))
-  elseif lines[li]:match("^" .. singleline .. "#") then
-    print(lines[li]:sub(#singleline + 1))
-  elseif lines[li]:match("^" .. multiline.start) then
-    local block = lines[li]:sub(#multiline.start + 1)
-    repeat
-      li = li + 1
-      block = block .. "\n" .. lines[li]
-    until lines[li]:match(multiline.ending .. "$")
-    block = block:sub(1, #block - #multiline.ending)
-    print(block)
+local CodeBlock = @record{
+  start: string,
+  ending: string
+}
+
+local IgnoreBlock = @record{
+  start: string,
+  ending: string
+}
+
+local FileConfig = @record{
+  input_path: string,
+  output_dir: string,
+  lang: string,
+  lead: string,
+  singleline: string,
+  multiline: Multiline,
+  code_block: CodeBlock,
+  ignore_block: IgnoreBlock,
+}
+
+local DirConfig = @record{
+  input_dir: string,
+  output_dir: string,
+  lang: string,
+  lead: string,
+  singleline: string,
+  multiline: Multiline,
+  code_block: CodeBlock,
+  ignore_block: IgnoreBlock,
+  ignore: sequence(string),
+}
+
+local function gen_doc(conf: FileConfig)
+  local sb: stringbuilder
+  local input_path = conf.input_path
+  local file_name_match, file_name_seq = input_path:match("(.*)%..*$")
+  assert(file_name_match)
+  local _file_path = file_name_seq[1]
+  if _file_path:sub(1,1) == "." then
+    _file_path = _file_path:sub(2)
   end
-  li = li + 1
+  local output_path = conf.output_dir .. _file_path .. ".md"
+  local lang = conf.lang
+  local singleline = conf.singleline
+  local lead = conf.lead
+  local multiline = conf.multiline
+  local code_block = conf.code_block
+  local ignore_block = conf.ignore_block
+
+  local lines: sequence(string)
+
+  local test_file = io.open(input_path):read("a")
+
+  for line in string.gmatch(test_file .. "\n", "([^\r\n]+)\r?\n") do
+    lines:push(line)
+  end
+
+  local li = 0
+  local doc_found: boolean
+  while li <= #lines do
+    if lines[li]:match(escape_special(singleline .. lead .. ignore_block.start)) then
+      local block_start_match = lines[li]:match(escape_special(singleline .. lead .. ignore_block.start) .. "%s*$")
+      if not block_start_match then
+        io.stderr:write(("%s:%d: Syntax error: Nothing should come after the code block start\n"):format(input_path, li))
+        os.exit(1)
+      end
+      li = li + 1
+      local start_mark = li
+      repeat
+        li = li + 1
+        if li > #lines then
+          io.stderr:write(("%s:%d:%d: error: No closing found for ignore block\n"):format(input_path, start_mark, #lines[start_mark]))
+          os.exit(1)
+        end
+      until lines[li]:match(escape_special(singleline .. lead .. ignore_block.ending) .. "%s*$")
+    elseif lines[li]:match(escape_special(singleline .. lead .. code_block.start)) then
+      local block_start_match = lines[li]:match(escape_special(singleline .. lead .. code_block.start) .. "%s*$")
+      if not block_start_match then
+        io.stderr:write(("%s:%d: Syntax error: Nothing should come after the code block start\n"):format(input_path, li))
+        os.exit(1)
+      end
+      sb:writef("```%s\n", lang)
+      li = li + 1
+      local start_mark = li
+      repeat
+        sb:write(lines[li])
+        li = li + 1
+        if li > #lines then
+          io.stderr:write(("%s:%d:%d: error: No closing found for code block\n"):format(input_path, start_mark, #lines[start_mark]))
+          os.exit(1)
+        end
+      until lines[li]:match(escape_special(singleline .. lead .. code_block.ending) .. "%s*$")
+      sb:write("```\n")
+      doc_found = true
+    elseif lines[li]:match(escape_special(singleline .. lead)) then
+      local line_match, line_seq = lines[li]:match(escape_special(singleline .. lead) .. "(.*)$")
+      if line_match then
+        sb:writef("%s\n", trim_wspace(line_seq[1]))
+        doc_found = true
+      end
+    elseif lines[li]:match(escape_special(multiline.start .. lead)) then
+      local block_start_match, block_start_seq = lines[li]:match(escape_special(multiline.start .. lead) .. "(.*)$")
+      if block_start_match then
+        local block = block_start_seq[1]
+        local block_end_match_str = escape_special(lead .. multiline.ending) .. "%s*$"
+        local block_match, block_seq = block:match("(.*)" .. block_end_match_str)
+        if block_match then
+          block = trim_wspace(block_seq[1])
+          sb:writef("%s\n", block)
+          li = li + 1
+          doc_found = true
+          continue
+        end
+        local start_mark = li
+        repeat
+          li = li + 1
+          block = block .. "\n" .. trim_wspace(lines[li])
+          if li > #lines then
+            io.stderr:write(("%s:%d:%d: error: No closing found for multiline doc\n"):format(input_path, start_mark, #lines[start_mark]))
+            os.exit(1)
+          end
+        until lines[li]:match(block_end_match_str)
+        local block_match, block_seq = block:match("(.*)" .. block_end_match_str)
+        if block_match then
+          block = trim_wspace(block_seq[1])
+          sb:writef("%s\n", block)
+          doc_found = true
+        end
+      end
+    end
+    li = li + 1
+  end
+
+  if doc_found then
+    local content = sb:promote()
+
+    mkdir_recursive(output_path)
+
+    local output_file <close> = io.open(output_path, "w")
+
+    if not output_file:isopen() then
+      io.stderr:write(("error: Failed to open file at path `%s`\n"):format(output_path))
+      os.exit(1)
+    end
+
+    output_file:write(content)
+  end
 end
+
+local function gen_docs(conf: DirConfig)
+  local file_paths: sequence(string)
+  local function list_files(path: string, file_paths: *sequence(string))
+    local dp: *dirent
+    local dir: *DIR = opendir(path)
+    if dir == nilptr then
+      io.stderr:write(("error: Failed to open directory at path `%s`\n"):format(path))
+      os.exit(1)
+    end
+
+    while true do
+      dp = readdir(dir)
+      if dp == nilptr then
+        break
+      end
+
+      local sub_path: string = &dp.d_name
+
+      if sub_path == "." or sub_path == ".." then
+        continue
+      end
+
+      local file_path = path .. "/" .. sub_path
+      local stat_buf: stat_t
+
+      if stat(file_path, &stat_buf) == -1 then
+          io.stderr:write(("error: Failed to get stats for path `%s`\n"):format(file_path))
+        continue
+      end
+
+      if (S_ISDIR(stat_buf.st_mode)) then
+        list_files(file_path, file_paths)
+      else
+        file_paths:push(file_path)
+      end
+    end
+    closedir(dir)
+  end
+
+  local output_dir_file <close> = io.open(conf.output_dir, "r")
+  if not output_dir_file:isopen() then
+    mkdir(conf.output_dir, S_IRWXU)
+  end
+  list_files(conf.input_dir, &file_paths)
+  for _, file_path in ipairs(file_paths) do
+    if not file_path:match("%." .. escape_special(conf.lang) .. "$") then
+      continue
+    end
+    for _, v in ipairs(conf.ignore) do
+      if file_path == v then
+        goto done
+      end
+      if v:sub(1,1) == "^" and file_path:match(v) then
+        print(file_path)
+        goto done
+      end 
+    end
+    local file_conf: FileConfig = {    
+      input_path = file_path,
+      output_dir = conf.output_dir,
+      lang = conf.lang,
+      singleline = conf.singleline,
+      lead = conf.lead,
+      multiline = conf.multiline,
+      code_block = conf.code_block,
+      ignore_block = conf.ignore_block,
+    }
+    gen_doc(file_conf)
+    ::done::
+  end
+end
+
+
+local conf: DirConfig = {
+  input_dir = "./test",
+  output_dir = "./test/docs",
+  lang = "nelua",
+  singleline = "--",
+  lead = "-",
+  multiline = {"--[[", "]]"},
+  code_block = {"{", "}"},
+  ignore_block = {"\\", "/"},
+  ignore = {},
+}
+
+gen_docs(conf)

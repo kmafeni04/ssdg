@@ -1,0 +1,13 @@
+--- # test 2
+local x = 10
+--[[-hello-]]
+--[[-
+  Multiline
+-]]
+--- # Person Struct
+---{
+local Person = @record{
+  name: string, -- Full name
+  age: integer -- age
+}
+---}
