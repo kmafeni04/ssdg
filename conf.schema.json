@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.com/schemas/dirconfig.schema.json",
+  "title": "DirConfig",
+  "type": "object",
+  "properties": {
+    "input_dir": {
+      "type": "string"
+    },
+    "output_dir": {
+      "type": "string"
+    },
+    "ext": {
+      "type": "string"
+    },
+    "lang": {
+      "type": "string"
+    },
+    "lead": {
+      "type": "string"
+    },
+    "single_line": {
+      "type": "string"
+    },
+    "multi_line": {
+      "$ref": "#/$defs/Block"
+    },
+    "code_block": {
+      "$ref": "#/$defs/Block"
+    },
+    "ignore_block": {
+      "$ref": "#/$defs/Block"
+    },
+    "ignore": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "input_dir",
+    "output_dir",
+    "ext",
+    "lang",
+    "single_line",
+    "multi_line"
+  ],
+  "$defs": {
+    "Block": {
+      "type": "object",
+      "properties": {
+        "starting": {
+          "type": "string"
+        },
+        "ending": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "starting",
+        "ending"
+      ]
+    }
+  }
+}

@@ -2,7 +2,7 @@
 hello
 Multiline
 # Person Struct
-```nelua
+```lua
 local Person = @record{
   name: string, -- Full name
   age: integer -- age

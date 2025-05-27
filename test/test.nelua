@@ -1,9 +1,9 @@
 --- # test 1
 local x = 10
 --- # Person Struct
----{
+---`
 local Person = @record{
   name: string, -- Full name
   age: integer -- age
 }
----}
+---`

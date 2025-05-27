@@ -1,6 +1,6 @@
 # test 1
 # Person Struct
-```nelua
+```lua
 local Person = @record{
   name: string, -- Full name
   age: integer -- age

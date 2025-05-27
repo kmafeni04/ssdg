@@ -1,0 +1,22 @@
+{
+  "$schema": "./conf.schema.json",
+  "input_dir": "./test",
+  "output_dir": "docs",
+  "ext": "nelua",
+  "lang": "lua",
+  "lead": "-",
+  "single_line": "--",
+  "multi_line": {
+    "starting": "--[[",
+    "ending": "]]"
+  },
+  "code_block": {
+    "starting": "`",
+    "ending": "`"
+  },
+  "ignore_block": {
+    "starting": "|",
+    "ending": "|"
+  },
+  "ignore": []
+}

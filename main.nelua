@@ -1,9 +1,11 @@
 require "string"
 require "io"
 require "os"
+require "arg"
 
 require "libs.dirent"
 require "libs.stat"
+
 local json = require "libs.json"
 
 local function trim_wspace(s: string)
@@ -26,42 +28,41 @@ local function mkdir_recursive(path: string)
   end
 end
 
+local function mild_assert(cond: boolean, err: string)
+  if not cond then
+    io.stderr:write(("error: %s\n"):format(err))
+    os.exit(1)
+  end
+end
 
-local Multiline = @record{
-  start: string,
-  ending: string
-}
-
-local CodeBlock = @record{
-  start: string,
-  ending: string
-}
-
-local IgnoreBlock = @record{
-  start: string,
+local Block = @record{
+  starting: string,
   ending: string
 }
 
 local FileConfig = @record{
   input_path: string,
+  base_dir: string,
   output_dir: string,
+  ext: string,
   lang: string,
   lead: string,
-  singleline: string,
-  multiline: Multiline,
-  code_block: CodeBlock,
-  ignore_block: IgnoreBlock,
+  single_line: string,
+  multi_line: Block,
+  code_block: Block,
+  ignore_block: Block,
 }
 
 local DirConfig = @record{
   input_dir: string,
   output_dir: string,
+  ext: string,
   lang: string,
   lead: string,
-  singleline: string,
-  multiline: Multiline,
-  code_block: CodeBlock,
-  ignore_block: IgnoreBlock,
+  single_line: string,
+  multi_line: Block,
+  code_block: Block,
+  ignore_block: Block,
   ignore: sequence(string),
 }
 
@@ -69,16 +70,20 @@ local function gen_doc(conf: FileConfig)
   local sb: stringbuilder
   local input_path = conf.input_path
   local file_name_match, file_name_seq = input_path:match("(.*)%..*$")
-  assert(file_name_match)
+  mild_assert(file_name_match, "Failed to match file name")
   local _file_path = file_name_seq[1]
+  if  _file_path:match(escape_special(conf.base_dir) .. ".*") then
+    _file_path = _file_path:sub(#conf.base_dir + 1)
+  end
   if _file_path:sub(1,1) == "." then
     _file_path = _file_path:sub(2)
   end
   local output_path = conf.output_dir .. _file_path .. ".md"
+  local ext = conf.ext
   local lang = conf.lang
-  local singleline = conf.singleline
+  local single_line = conf.single_line
   local lead = conf.lead
-  local multiline = conf.multiline
+  local multi_line = conf.multi_line
   local code_block = conf.code_block
   local ignore_block = conf.ignore_block
 
@@ -93,8 +98,8 @@ local function gen_doc(conf: FileConfig)
   local li = 0
   local doc_found: boolean
   while li <= #lines do
-    if lines[li]:match(escape_special(singleline .. lead .. ignore_block.start)) then
-      local block_start_match = lines[li]:match(escape_special(singleline .. lead .. ignore_block.start) .. "%s*$")
+    if lines[li]:match(escape_special(single_line .. lead .. ignore_block.starting)) then
+      local block_start_match = lines[li]:match(escape_special(single_line .. lead .. ignore_block.starting) .. "%s*$")
       if not block_start_match then
         io.stderr:write(("%s:%d: Syntax error: Nothing should come after the code block start\n"):format(input_path, li))
         os.exit(1)
@@ -107,9 +112,9 @@ local function gen_doc(conf: FileConfig)
           io.stderr:write(("%s:%d:%d: error: No closing found for ignore block\n"):format(input_path, start_mark, #lines[start_mark]))
           os.exit(1)
         end
-      until lines[li]:match(escape_special(singleline .. lead .. ignore_block.ending) .. "%s*$")
-    elseif lines[li]:match(escape_special(singleline .. lead .. code_block.start)) then
-      local block_start_match = lines[li]:match(escape_special(singleline .. lead .. code_block.start) .. "%s*$")
+      until lines[li]:match(escape_special(single_line .. lead .. ignore_block.ending) .. "%s*$")
+    elseif lines[li]:match(escape_special(single_line .. lead .. code_block.starting)) then
+      local block_start_match = lines[li]:match(escape_special(single_line .. lead .. code_block.starting) .. "%s*$")
       if not block_start_match then
         io.stderr:write(("%s:%d: Syntax error: Nothing should come after the code block start\n"):format(input_path, li))
         os.exit(1)
@@ -124,20 +129,20 @@ local function gen_doc(conf: FileConfig)
           io.stderr:write(("%s:%d:%d: error: No closing found for code block\n"):format(input_path, start_mark, #lines[start_mark]))
           os.exit(1)
         end
-      until lines[li]:match(escape_special(singleline .. lead .. code_block.ending) .. "%s*$")
+      until lines[li]:match(escape_special(single_line .. lead .. code_block.ending) .. "%s*$")
       sb:write("```\n")
       doc_found = true
-    elseif lines[li]:match(escape_special(singleline .. lead)) then
-      local line_match, line_seq = lines[li]:match(escape_special(singleline .. lead) .. "(.*)$")
+    elseif lines[li]:match(escape_special(single_line .. lead)) then
+      local line_match, line_seq = lines[li]:match(escape_special(single_line .. lead) .. "(.*)$")
       if line_match then
         sb:writef("%s\n", trim_wspace(line_seq[1]))
         doc_found = true
       end
-    elseif lines[li]:match(escape_special(multiline.start .. lead)) then
-      local block_start_match, block_start_seq = lines[li]:match(escape_special(multiline.start .. lead) .. "(.*)$")
+    elseif lines[li]:match(escape_special(multi_line.starting .. lead)) then
+      local block_start_match, block_start_seq = lines[li]:match(escape_special(multi_line.starting .. lead) .. "(.*)$")
       if block_start_match then
         local block = block_start_seq[1]
-        local block_end_match_str = escape_special(lead .. multiline.ending) .. "%s*$"
+        local block_end_match_str = escape_special(lead .. multi_line.ending) .. "%s*$"
         local block_match, block_seq = block:match("(.*)" .. block_end_match_str)
         if block_match then
           block = trim_wspace(block_seq[1])
@@ -151,7 +156,7 @@ local function gen_doc(conf: FileConfig)
           li = li + 1
           block = block .. "\n" .. trim_wspace(lines[li])
           if li > #lines then
-            io.stderr:write(("%s:%d:%d: error: No closing found for multiline doc\n"):format(input_path, start_mark, #lines[start_mark]))
+            io.stderr:write(("%s:%d:%d: error: No closing found for multi_line doc\n"):format(input_path, start_mark, #lines[start_mark]))
             os.exit(1)
           end
         until lines[li]:match(block_end_match_str)
@@ -221,13 +226,14 @@ local function gen_docs(conf: DirConfig)
     closedir(dir)
   end
 
-  local output_dir_file <close> = io.open(conf.output_dir, "r")
+  local output_dir_file <close> = io.open(conf.input_dir .. "/" .. conf.output_dir, "r")
   if not output_dir_file:isopen() then
-    mkdir(conf.output_dir, S_IRWXU)
+    mkdir(conf.input_dir .. "/" .. conf.output_dir, S_IRWXU)
   end
   list_files(conf.input_dir, &file_paths)
-  for _, file_path in ipairs(file_paths) do
-    if not file_path:match("%." .. escape_special(conf.lang) .. "$") then
+  for i, file_path in ipairs(file_paths) do
+    local file_path = file_path
+    if not file_path:match("%." .. escape_special(conf.ext) .. "$") then
       continue
     end
     for _, v in ipairs(conf.ignore) do
@@ -235,17 +241,18 @@ local function gen_docs(conf: DirConfig)
         goto done
       end
       if v:sub(1,1) == "^" and file_path:match(v) then
-        print(file_path)
         goto done
       end 
     end
-    local file_conf: FileConfig = {    
+    local file_conf: FileConfig = {
       input_path = file_path,
-      output_dir = conf.output_dir,
+      base_dir = conf.input_dir,
+      output_dir = conf.input_dir .. "/" .. conf.output_dir,
+      ext = conf.ext,
       lang = conf.lang,
-      singleline = conf.singleline,
+      single_line = conf.single_line,
       lead = conf.lead,
-      multiline = conf.multiline,
+      multi_line = conf.multi_line,
       code_block = conf.code_block,
       ignore_block = conf.ignore_block,
     }
@@ -254,17 +261,109 @@ local function gen_docs(conf: DirConfig)
   end
 end
 
+if #arg < 1 then
+  print("Please pass in the path to your config file")
+  os.exit(0)
+end
 
-local conf: DirConfig = {
-  input_dir = "./test",
-  output_dir = "./test/docs",
-  lang = "nelua",
-  singleline = "--",
-  lead = "-",
-  multiline = {"--[[", "]]"},
-  code_block = {"{", "}"},
-  ignore_block = {"\\", "/"},
-  ignore = {},
-}
+local conf_path, err = arg[1]
+
+local conf_file <close> = io.open(conf_path, "r")
+
+if not conf_file:isopen() then
+  io.stderr:write(("Failed to open config at path `%s`\n"):format(conf_path))
+  os.exit(1)
+end
+
+local conf_json = conf_file:read("a")
+
+local root_node, err = json.parse_string(conf_json)
+
+mild_assert(err == "", err)
+
+mild_assert(root_node:is_obj(), "Failed to parse an object")
+
+local conf: DirConfig
+
+local obj = root_node:get_obj()
+
+mild_assert(obj:has("input_dir"), "input_dir must be set")
+mild_assert(obj["input_dir"]:is_str(), "input_dir must be a string")
+conf.input_dir = obj["input_dir"]:get_str()
+
+mild_assert(obj:has("output_dir"), "output_dir must be set")
+mild_assert(obj["output_dir"]:is_str(), "output_dir must be a string")
+conf.output_dir = obj["output_dir"]:get_str()
+
+mild_assert(obj:has("ext"), "ext must be set")
+mild_assert(obj["ext"]:is_str(), "ext must be a string")
+conf.ext = obj["ext"]:get_str()
+
+mild_assert(obj:has("lang"), "lang must be set")
+mild_assert(obj["lang"]:is_str(), "lang must be a string")
+conf.lang = obj["lang"]:get_str()
+
+if obj:has("lead") then
+  mild_assert(obj["lead"]:is_str(), "lead must be a string")
+  conf.lead = obj["lead"]:get_str()
+  mild_assert(conf.lead ~= "", "lead cannot be an empty string")
+else
+  conf.lead = "-"
+end
+
+mild_assert(obj:has("single_line"), "single_line must be set")
+mild_assert(obj["single_line"]:is_str(), "single_line must be a string")
+conf.single_line = obj["single_line"]:get_str()
+
+mild_assert(obj:has("multi_line"), "multi_line must be set")
+mild_assert(obj["multi_line"]:is_obj(), "multi_line must be an object")
+local block = obj["multi_line"]:get_obj()
+mild_assert(block:has("starting"), "starting must be set")
+mild_assert(block["starting"]:is_str(), "starting must be a string")
+conf.multi_line.starting = block["starting"]:get_str()
+mild_assert(block:has("ending"), "ending must be set")
+mild_assert(block["ending"]:is_str(), "ending must be a string")
+conf.multi_line.ending = block["ending"]:get_str()
+
+if obj:has("code_block") then
+  mild_assert(obj["code_block"]:is_obj(), "code_block must be an object")
+  local block = obj["code_block"]:get_obj()
+  mild_assert(block:has("starting"), "code_block.starting must be set")
+  mild_assert(block["starting"]:is_str(), "code_block.starting must be a string")
+  conf.code_block.starting = block["starting"]:get_str()
+  mild_assert(conf.code_block.starting ~= "", "code_block.starting cannot be an empty string")
+  mild_assert(block:has("ending"), "code_block.ending must be set")
+  mild_assert(block["ending"]:is_str(), "code_block.ending must be a string")
+  conf.code_block.ending = block["ending"]:get_str()
+  mild_assert(conf.code_block.ending ~= "", "code_block.ending cannot be an empty string")
+else
+  conf.code_block.starting = "`"
+  conf.code_block.ending = "`"
+end
+
+if obj:has("ignore_block") then
+  mild_assert(obj["ignore_block"]:is_obj(), "ignore_block must be an object")
+  local block = obj["ignore_block"]:get_obj()
+  mild_assert(block:has("starting"), "ignore_block.starting must be set")
+  mild_assert(block["starting"]:is_str(), "ignore_block.starting must be a string")
+  conf.ignore_block.starting = block["starting"]:get_str()
+  mild_assert(conf.ignore_block.starting ~= "", "ignore_block.starting cannot be an empty string")
+  mild_assert(block:has("ending"), "ignore_block.ending must be set")
+  mild_assert(block["ending"]:is_str(), "ignore_block.ending must be a string")
+  conf.ignore_block.ending = block["ending"]:get_str()
+  mild_assert(conf.ignore_block.ending ~= "", "ignore_block.ending cannot be an empty string")
+else
+  conf.ignore_block.starting = "|"
+  conf.ignore_block.ending = "|"
+end
+
+if obj:has("ignore") then
+  mild_assert(obj["ignore"]:is_arr(), "ignore must be an array")
+  local arr = obj["ignore"]:get_arr()
+  for _, v in ipairs(arr) do
+    mild_assert(v:is_str(), "All fields in the ignore array must be a string")
+    conf.ignore:push(v:get_str())
+  end
+end
 
 gen_docs(conf)
