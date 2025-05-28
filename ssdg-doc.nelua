@@ -1,0 +1,91 @@
+local ssdg = require ".ssdg"
+
+local gen = ssdg.new({
+  lang =  "lua",
+  lead =  "-",
+  single_line =  "--",
+  multi_line =  {
+    starting = "--[[",
+    ending = "]]"
+  },
+  code_block =  {
+    starting = "`",
+    ending = "`"
+  },
+  ignore_block =  {
+    starting = "|",
+    ending = "|"
+  },
+})
+
+gen:add([=[
+# Super Simple Doc Gen
+
+A language agnostic documentation generator written in nelua
+
+## Requirement
+- [nelua](https://github.com/edubart/nelua-lang/)
+
+## Quick Start
+
+```lua
+-- file-doc.nelua
+local ssdg = require "path.to.ssdg"
+
+local gen = ssdg.new({
+  lang =  "nelua",
+  lead =  "-",
+  single_line =  "--",
+  multi_line =  {
+    starting = "--[[",
+    ending = "]]"
+  },
+  code_block =  {
+    starting = "`",
+    ending = "`"
+  },
+  ignore_block =  {
+    starting = "|",
+    ending = "|"
+  },
+})
+
+gen:add([[
+# File
+
+This is just dummy text
+
+]])
+
+gen:add_file("file.nelua")
+
+gen:add([[
+---
+
+You have reached the end of the documentation!
+]])
+
+gen:write_file("file.md")
+
+```
+
+See the [example](./example) folder for an example on how to generate documentation
+
+To regenerate `example/person.md` run the following from the project's root:
+
+```bash
+nelua example/person-docs.nelua
+```
+
+]=])
+
+gen:add_file("ssdg.nelua")
+
+gen:add([[
+## Acknowledgements
+
+This libary is heavily inspired by [fir](https://github.com/daelvn/fir) and [nldoc](https://github.com/edubart/nldoc)
+]])
+
+gen:write_file("README.md")
+

@@ -1,0 +1,40 @@
+-- file-doc.nelua
+local ssdg = require "..ssdg"
+
+local gen = ssdg.new({
+  lang =  "lua", -- required
+  lead =  "-", -- default value
+  single_line =  "--", -- required
+  multi_line =  {
+    starting = "--[[", -- required
+    ending = "]]" -- required
+  },
+  code_block =  {
+    starting = "`", -- default value
+    ending = "`" -- default value
+  },
+  ignore_block =  {
+    starting = "|", -- default value
+    ending = "|" -- default value
+  },
+})
+
+gen:add([[
+# Person Library
+
+Just an example documentation.
+This text goes in the top of the page.
+
+]])
+
+gen:add_file("example/person.nelua")
+
+gen:add([[
+---
+
+You have reached the end of the documentation!
+]])
+
+gen:write_file("example/person.md")
+
+
