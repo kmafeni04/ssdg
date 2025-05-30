@@ -16,6 +16,10 @@ local gen = ssdg.new({
     starting = "|",
     ending = "|"
   },
+  sub =  {
+    starting = ":",
+    ending = ":"
+  },
 })
 
 gen:add([=[
@@ -47,6 +51,10 @@ local gen = ssdg.new({
   ignore_block =  {
     starting = "|",
     ending = "|"
+  },
+  sub =  {
+    starting = ":",
+    ending = ":"
   },
 })
 

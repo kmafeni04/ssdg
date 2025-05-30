@@ -24,6 +24,11 @@ function Person.create(name: string, age: integer): *Person
 
 Returns the person name
 
+Example:
+```lua
+local name = person:get_name()
+```
+
 ```lua
 function Person:get_name(): string
 ```
@@ -31,6 +36,11 @@ function Person:get_name(): string
 ## Person:get_age
 
 Returns the person age
+
+Example:
+```lua
+local age = person:get_age()
+```
 
 ```lua
 function Person:get_age(): integer

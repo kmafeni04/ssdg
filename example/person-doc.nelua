@@ -17,6 +17,10 @@ local gen = ssdg.new({
     starting = "|", -- default value
     ending = "|" -- default value
   },
+  sub =  {
+    starting = ":", -- default value
+    ending = ":" -- default value
+  },
 })
 
 gen:add([[
@@ -27,7 +31,10 @@ This text goes in the top of the page.
 
 ]])
 
-gen:add_file("example/person.nelua")
+local subs: hashmap(string, string)
+subs["lang"] = gen.conf.lang
+
+gen:add_file("example/person.nelua", {subs = subs})
 
 gen:add([[
 ---

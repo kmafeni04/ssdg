@@ -27,6 +27,10 @@ local gen = ssdg.new({
     starting = "|",
     ending = "|"
   },
+  sub =  {
+    starting = ":",
+    ending = ":"
+  },
 })
 
 gen:add([[
@@ -77,6 +81,18 @@ local Config = @record{
   multi_line: Block, -- optional, default 'none', defines the way multiline comments should be extracted
   code_block: Block, -- optional, default '`', delimeters used to determine when to start or stop wrapping code in a code block
   ignore_block: Block, -- optional, default '|', delimeters used to determine when to start or stop ignoring comments
+  sub: Block, -- optional, default ':', delimeters used to determine when to start or stop definining the content that will be subbed in a doc
+}
+```
+
+### FileOptions record
+
+Used to pass extra behaviours to [ssdg:add_file](#ssdgadd_file)
+`subs` - Used to replace any thing that matches the inside of the [Config](#config-record).sub Block
+
+```lua
+local FileOptions = @record{
+  subs: hashmap(string, string)
 }
 ```
 
@@ -112,7 +128,7 @@ function ssdg:add(s: string)
 Reads the content of a file at `path` adding any docs to the buffer based on the provided config
 
 ```lua
-function ssdg:add_file(path: string)
+function ssdg:add_file(path: string, opts: FileOptions)
 ```
 
 ### ssdg:write_file
