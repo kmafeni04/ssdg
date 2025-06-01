@@ -60,6 +60,27 @@ local function assert_block(conf: Config)
     conf.ignore_block,
     conf.sub
   }
+  local function index_tostring(i: uinteger): string
+    switch i do
+      case 1 then
+        return "multi_line"
+      case 2 then
+        return "code_block"
+      case 3 then
+        return "ignore_block"
+      case 4 then
+        return "sub"
+    end
+    return "UNKNOWN INDEX"
+  end
+  for i, v in ipairs(check) do
+    if v.starting ~= "" then
+      assert(v.ending ~= "", ("Block `%s` can not have an empty ending if it's starting is set"):format(index_tostring(i)))
+    end
+    if v.ending~= "" then
+      assert(v.starting ~= "", ("Block `%s` can not have an empty starting if it's ending is set"):format(index_tostring(i)))
+    end
+  end
   local seen_starting: hashmap(string, Block)
   for i, v in ipairs(check) do
     assert(not seen_starting:has(v.starting), ("%s is already assigned as the starting of another `Block`"):format(v.starting))
