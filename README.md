@@ -85,13 +85,13 @@ local Config = @record{
 }
 ```
 
-### FileOptions record
+### AddOptions record
 
-Used to pass extra behaviours to [ssdg:add_file](#ssdgadd_file)
+Used to pass extra behaviours to ssdg:add functions
 `subs` - Used to replace any thing that matches the inside of the [Config](#config-record).sub Block
 
 ```lua
-local FileOptions = @record{
+local AddOptions = @record{
   subs: hashmap(string, string)
 }
 ```
@@ -120,7 +120,7 @@ function ssdg.new(conf: Config): ssdg
 Adds `s` to the instance buffer
 
 ```lua
-function ssdg:add(s: string)
+function ssdg:add(s: string, opts: AddOptions)
 ```
 
 ### ssdg:add_file
@@ -128,7 +128,7 @@ function ssdg:add(s: string)
 Reads the content of a file at `path` adding any docs to the buffer based on the provided config
 
 ```lua
-function ssdg:add_file(path: string, opts: FileOptions)
+function ssdg:add_file(path: string, opts: AddOptions)
 ```
 
 ### ssdg:write_file

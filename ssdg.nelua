@@ -35,13 +35,13 @@ local Config = @record{
 }
 ---`
 
---- ### FileOptions record
+--- ### AddOptions record
 --[[-
-Used to pass extra behaviours to [ssdg:add_file](#ssdgadd_file)
+Used to pass extra behaviours to ssdg:add functions
 `subs` - Used to replace any thing that matches the inside of the [Config](#config-record).sub Block
 -]]
 ---`
-local FileOptions = @record{
+local AddOptions = @record{
   subs: hashmap(string, string)
 }
 ---`
@@ -121,15 +121,18 @@ end
 --- ### ssdg:add
 --- Adds `s` to the instance buffer
 ---`
-function ssdg:add(s: string)
+function ssdg:add(s: string, opts: AddOptions)
 ---`
+  local conf = self.conf
+  local sub_str = ("%s%s%s"):format(escape_special(conf.sub.starting), "%s*([%w_]+)%s*", escape_special(conf.sub.ending))
+  s = s:gsub(sub_str, opts.subs)
   assert(self.buf:write(s), "Failed to write into internal buffer")
 end
 
 --- ### ssdg:add_file
 --- Reads the content of a file at `path` adding any docs to the buffer based on the provided config
 ---`
-function ssdg:add_file(path: string, opts: FileOptions)
+function ssdg:add_file(path: string, opts: AddOptions)
 ---`
   local file <close> = io.open(path, "r")
   assert(file:isopen(), "Failed to open file at path: " .. path)
@@ -167,7 +170,7 @@ function ssdg:add_file(path: string, opts: FileOptions)
       li = li + 1
       local start_mark = li
       repeat
-        lines[li] = lines[li]:gsub(sub_str, opts.subs)
+        lines[li] = lines[li]:gsub(sub_str, opts.subs) -- I do it per line to make sure that I am in a doc comment before subbing out
         self.buf:write(lines[li])
         li = li + 1
         assert(li <= #lines, ("%s:%d:%d: error: No closing found for code block"):format(path, start_mark, #lines[start_mark]))
